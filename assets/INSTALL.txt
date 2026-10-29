@@ -1,0 +1,42 @@
+WarmerSun - install
+===================
+
+1. Close Euro Truck Simulator 2 / American Truck Simulator.
+
+2. Copy these three files into the game's binary folder:
+
+       dxgi.dll
+       dinput8.dll
+       WarmerSun.ini
+
+   Typical paths:
+
+       ...\Steam\steamapps\common\Euro Truck Simulator 2\bin\win_x64\
+       ...\Steam\steamapps\common\American Truck Simulator\bin\win_x64\
+
+3. Start the game. In the log (next to the DLLs, or in
+   %LOCALAPPDATA%\WarmerSun\ if the game folder is read-only) you should see:
+
+       WarmerSun dxgi proxy loaded (enabled=1 preset=D)
+       factory hooked (CreateSwapChain/ForHwnd/ForComposition)
+       swap chain hooked (Present/Present1/ResizeBuffers1)
+       WarmerSun renderer ready (preset D)
+
+4. In game:
+       F10  toggle the grade (A/B comparison)
+       F11  cycle preset A -> B -> C -> D
+       F12  reload WarmerSun.ini
+
+Uninstall
+---------
+Delete dxgi.dll, dinput8.dll and WarmerSun.ini from bin\win_x64.
+Nothing is written to the registry, no service, no scheduled task.
+
+If the game will not start
+--------------------------
+Create an empty file named "WarmerSun.off" next to the DLLs. The proxies stay
+loaded but do nothing, which is enough to confirm the mod is the cause.
+Delete the file to re-enable.
+
+Do not use with another dxgi/dinput8 proxy (ReShade's dxgi.dll, Special K, a
+DLSS unlocker) in the same folder - only one module can own each name.

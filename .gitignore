@@ -1,0 +1,24 @@
+# build output
+dist/
+build/
+out/
+*.obj
+*.o
+*.pdb
+*.ilk
+*.exp
+*.lib
+
+# test artifacts
+tests/out/
+*.dds
+WarmerSun.log
+WarmerSun_frame_*.dds
+harness_before.dds
+
+# editor / OS
+.vs/
+.vscode/
+*.user
+Thumbs.db
+desktop.ini
