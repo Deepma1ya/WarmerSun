@@ -37,13 +37,28 @@ bool ensure_real() {
     wchar_t dir[MAX_PATH] = {};
     UINT n = GetSystemDirectoryW(dir, MAX_PATH);
     if (!n || n >= MAX_PATH) return false;
-    std::wstring path(dir, n);
-    path += L"\\dinput8.dll";
+    std::wstring system_path(dir, n);
+    system_path += L"\\dinput8.dll";
 
-    // Make sure we do not resolve back to this module.
-    g_real = LoadLibraryExW(path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+    // Loading the system file by name resolves to this proxy (same base name).
+    // Copy it to a unique name so the real functions are reachable.
+    std::wstring copy = ws::module_dir(g_self) + L"\\WarmerSun.real.dinput8.dll";
+    if (GetFileAttributesW(copy.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        if (!CopyFileW(system_path.c_str(), copy.c_str(), FALSE)) {
+            ws::log_write("dinput8: could not copy system dinput8 (%lu)", GetLastError());
+            copy.clear();
+        }
+    }
+
+    if (!copy.empty()) g_real = LoadLibraryW(copy.c_str());
+    if (!g_real) g_real = LoadLibraryExW(system_path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
     if (!g_real) {
         ws::log_write("dinput8: failed to load system dinput8 (%lu)", GetLastError());
+        return false;
+    }
+    if (g_real == g_self) {
+        ws::log_write("dinput8: real dinput8 resolved to the proxy itself; forwarding disabled");
+        g_real = nullptr;
         return false;
     }
     g_di8create = reinterpret_cast<PFN_DirectInput8Create>(GetProcAddress(g_real, "DirectInput8Create"));

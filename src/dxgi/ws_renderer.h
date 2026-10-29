@@ -12,6 +12,9 @@
 
 namespace ws {
 
+// Re-applies the D3D11 vtable hooks; the runtime replaces them during init.
+void refresh_shader_hooks();
+
 class Renderer {
 public:
     bool init(IDXGISwapChain* swapChain);
@@ -22,6 +25,11 @@ public:
     bool present(IDXGISwapChain* swapChain, UINT presentFlags);
 
     void notify_resize();
+
+    // Applies the grade to the back buffer. Called either from the tonemap
+    // draw hook (before the UI) or from Present as a fallback.
+    bool grade_now();
+    bool graded() const { return graded_; }
 
     bool ready() const { return ready_; }
     void set_config(const Config& cfg);
@@ -46,6 +54,7 @@ private:
     ID3D11Device*        device_  = nullptr;
     ID3D11DeviceContext* context_ = nullptr;
     IDXGISwapChain*      swap_    = nullptr;
+    HWND                 hwnd_    = nullptr;
 
     UINT        width_     = 0;
     UINT        height_    = 0;
@@ -85,6 +94,7 @@ private:
     ID3D11DepthStencilState* depth_ = nullptr;
 
     bool  ready_        = false;
+    bool  graded_       = false;
     bool  failed_       = false;
     ULONGLONG lastTick_ = 0;
     unsigned long long frame_ = 0;
@@ -97,5 +107,8 @@ private:
 extern Renderer g_renderer;
 
 } // namespace ws
+
+
+
 
 

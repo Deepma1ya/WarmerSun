@@ -1,7 +1,21 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to WarmerSun. The format follows Keep a Changelog and the
 project uses semantic versioning once a licence is chosen.
+
+## v0.2.0
+
+- Added the End-key in-game panel (Dear ImGui) with presets, colour, tone,
+  adaptation and detail controls, plus save-to-ini.
+- The panel uses a virtual cursor driven by raw mouse input, so the game's
+  cursor lock cannot block or offset it.
+- Moved the grade to the scene/UI boundary: D3D11 device/context hooks
+  (MinHook) detect the first UI shader draw and grade before it. Opaque UI
+  pixels are now bit-identical with the grade on or off.
+- Vendored Dear ImGui 1.91.8 (MIT) and MinHook 1.3.3 (BSD-2-Clause).
+- Added UI-shader and tonemap-shader hash tables generated from the game's
+  effective shader set for pass identification.
+- Harness re-verified (PASS).
 
 ## v0.1.3
 
@@ -47,3 +61,4 @@ First public release.
 - Four presets, live ini reload and hotkeys.
 - End-to-end harness with before/after frame comparison.
 - No DRM, no account, no network, no telemetry.
+

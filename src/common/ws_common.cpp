@@ -221,7 +221,28 @@ void log_shutdown() {
     g_logPath.clear();
 }
 
+void trace_raw(const char* msg) {
+    std::wstring path = data_dir(nullptr) + L"\\WarmerSun.trace";
+    HANDLE h = CreateFileW(path.c_str(), FILE_APPEND_DATA,
+                           FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
+                           FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return;
+    DWORD written = 0;
+    WriteFile(h, msg, static_cast<DWORD>(strlen(msg)), &written, nullptr);
+    WriteFile(h, "\r\n", 2, &written, nullptr);
+    CloseHandle(h);
+}
+
 void log_write(const char* fmt, ...) {
+    // A log call must never recurse: a failure inside the stream or the CRT
+    // formatter would otherwise exhaust the stack while we are trying to report it.
+    static thread_local int depth = 0;
+    if (depth > 0) {
+        OutputDebugStringA("[WarmerSun] recursive log suppressed\n");
+        return;
+    }
+    ++depth;
+
     va_list args;
     va_start(args, fmt);
     std::string line = format_args(fmt, args);
@@ -232,15 +253,16 @@ void log_write(const char* fmt, ...) {
     OutputDebugStringA("\n");
 
     std::lock_guard<std::mutex> lock(g_logMutex);
-    if (!g_logOpen || g_logPath.empty()) return;
+    if (!g_logOpen || g_logPath.empty()) { --depth; return; }
     std::ofstream out(g_logPath.c_str(), std::ios::app);
-    if (!out.is_open()) return;
+    if (!out.is_open()) { --depth; return; }
     SYSTEMTIME st;
     GetLocalTime(&st);
     char stamp[32];
     snprintf(stamp, sizeof(stamp), "%02u:%02u:%02u.%03u ", st.wHour, st.wMinute, st.wSecond,
              st.wMilliseconds);
     out << stamp << line << "\r\n";
+    --depth;
 }
 
 // ---------------------------------------------------------------------------
@@ -405,6 +427,63 @@ bool load_config(const std::wstring& path, Config& out, char presetOverride) {
     return true;
 }
 
+bool save_config(const std::wstring& path, const Config& cfg) {
+    std::ofstream out(path.c_str(), std::ios::trunc);
+    if (!out.is_open()) return false;
+
+    char buf[64];
+    auto f = [&](const char* key, float value) {
+        snprintf(buf, sizeof(buf), "%.3f", value);
+        out << key << "=" << buf << "\n";
+    };
+    auto i = [&](const char* key, int value) { out << key << "=" << value << "\n"; };
+
+    out << "[WarmerSun]\n";
+    out << "Enabled=" << (cfg.enabled ? 1 : 0) << "\n";
+    out << "Preset=" << cfg.preset << "\n";
+    out << "KeyToggle=F10\nKeyPreset=F11\nKeyReload=F12\n";
+    out << "DumpFrames=" << (cfg.dumpFrames ? 1 : 0) << "\n\n";
+
+    for (char p : {'A', 'B', 'C', 'D'}) {
+        ColorParams col = cfg.color;
+        DynamicParams dyn = cfg.dynamic;
+        SharpenParams sh = cfg.sharpen;
+        if (p != cfg.preset) {
+            apply_builtin_preset(p, col);
+            apply_builtin_dynamic(p, dyn);
+            apply_builtin_sharpen(p, sh);
+        }
+        out << "[Preset." << p << "]\n";
+        f("Temperature", col.temperature);
+        f("Tint", col.tint);
+        f("PreExposure", col.preExposure);
+        f("Exposure", col.exposure);
+        f("PreContrast", col.preContrast);
+        f("Contrast", col.contrast);
+        f("Saturation", col.saturation);
+        f("Vibrance", col.vibrance);
+        f("Highlights", col.highlights);
+        f("Shadows", col.shadows);
+        f("Whites", col.whites);
+        f("Blacks", col.blacks);
+        f("NightExposure", col.nightExposure);
+        f("SunWarmth", col.sunWarmth);
+        i("Dynamic", dyn.enabled ? 1 : 0);
+        f("AdaptSpeed", dyn.adaptSpeed);
+        f("Key", dyn.key);
+        f("MinEV", dyn.minEV);
+        f("MaxEV", dyn.maxEV);
+        i("Sharpen", sh.enabled ? 1 : 0);
+        f("Sharpness", sh.sharpness);
+        f("SharpenEdges", sh.edges);
+        out << "\n";
+    }
+    return out.good();
+}
+
 } // namespace ws
+
+
+
 
 

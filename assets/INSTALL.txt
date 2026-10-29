@@ -1,4 +1,4 @@
-WarmerSun - install
+﻿WarmerSun - install
 ===================
 
 1. Close Euro Truck Simulator 2 / American Truck Simulator.
@@ -23,6 +23,7 @@ WarmerSun - install
        WarmerSun renderer ready (preset D)
 
 4. In game:
+       End  open / close the settings panel
        F10  toggle the grade (A/B comparison)
        F11  cycle preset A -> B -> C -> D
        F12  reload WarmerSun.ini
@@ -40,3 +41,4 @@ Delete the file to re-enable.
 
 Do not use with another dxgi/dinput8 proxy (ReShade's dxgi.dll, Special K, a
 DLSS unlocker) in the same folder - only one module can own each name.
+

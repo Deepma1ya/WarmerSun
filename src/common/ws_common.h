@@ -84,12 +84,19 @@ void log_init(HMODULE module);
 void log_shutdown();
 void log_write(const char* fmt, ...);
 
+// Append-only trace that uses no CRT formatting. Safe before log_init and
+// useful when a logging call itself is under suspicion.
+void trace_raw(const char* msg);
+
 // Looks for WarmerSun.ini next to the module, then next to the process exe.
 std::wstring find_config(HMODULE module);
 
 // Parses the ini. Missing keys keep their defaults. Returns false only when
 // the file exists but could not be read.
 bool load_config(const std::wstring& path, Config& out, char presetOverride = 0);
+
+// Writes the active preset plus the three built-in presets back to the ini.
+bool save_config(const std::wstring& path, const Config& cfg);
 
 // Applies the built-in preset letter ('A'..'D') to the params.
 void apply_builtin_preset(char preset, ColorParams& color);
@@ -104,5 +111,7 @@ std::string trim(const std::string& s);
 std::string lower(std::string s);
 
 } // namespace ws
+
+
 
 

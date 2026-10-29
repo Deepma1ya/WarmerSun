@@ -1,5 +1,7 @@
 ﻿// WarmerSun - present-level D3D11 grading pipeline.
 #include "ws_renderer.h"
+#include "ws_menu.h"
+#include <dxgi1_2.h>
 
 #include <algorithm>
 #include <cmath>
@@ -264,9 +266,9 @@ struct SavedState {
     ID3D11RenderTargetView* rtvs[D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT] = {};
     ID3D11DepthStencilView* dsv = nullptr;
     UINT viewportCount = 0;
-    D3D11_VIEWPORT viewports[D3D11_VIEWPORT_BOUNDS_MAX] = {};
+    D3D11_VIEWPORT viewports[D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE] = {};
     UINT scissorCount = 0;
-    D3D11_RECT scissors[D3D11_VIEWPORT_BOUNDS_MAX] = {};
+    D3D11_RECT scissors[D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE] = {};
     ID3D11InputLayout* layout = nullptr;
     D3D11_PRIMITIVE_TOPOLOGY topology = D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED;
     ID3D11VertexShader* vs = nullptr;
@@ -291,9 +293,9 @@ void save_state(ID3D11DeviceContext* ctx, SavedState& s) {
     ctx->OMGetBlendState(&s.blend, s.blendFactor, &s.sampleMask);
     ctx->OMGetDepthStencilState(&s.depth, &s.stencilRef);
 
-    s.viewportCount = D3D11_VIEWPORT_BOUNDS_MAX;
+    s.viewportCount = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
     ctx->RSGetViewports(&s.viewportCount, s.viewports);
-    s.scissorCount = D3D11_VIEWPORT_BOUNDS_MAX;
+    s.scissorCount = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
     ctx->RSGetScissorRects(&s.scissorCount, s.scissors);
     ctx->RSGetState(&s.raster);
 
@@ -375,9 +377,11 @@ void Renderer::notify_resize() {
 }
 
 bool Renderer::init(IDXGISwapChain* sc) {
+    ws::trace_raw("init: enter");
     if (ready_) return true;
     if (failed_) return false;
     swap_ = sc;
+    log_write("init: begin");
 
     HRESULT hr = sc->GetDevice(__uuidof(ID3D11Device), reinterpret_cast<void**>(&device_));
     if (FAILED(hr) || !device_) {
@@ -385,22 +389,35 @@ bool Renderer::init(IDXGISwapChain* sc) {
         failed_ = true;
         return false;
     }
+    log_write("init: device ok");
     device_->GetImmediateContext(&context_);
+    if (context_) {
+        IDXGISwapChain1* sc1 = nullptr;
+        if (SUCCEEDED(sc->QueryInterface(__uuidof(IDXGISwapChain1),
+                                         reinterpret_cast<void**>(&sc1))) && sc1) {
+            sc1->GetHwnd(&hwnd_);
+            sc1->Release();
+        }
+    }
     if (!context_) {
         log_write("GetImmediateContext failed - WarmerSun disabled");
         failed_ = true;
         return false;
     }
 
+    log_write("init: context ok");
     if (!g_compiler.load()) {
         log_write("d3dcompiler_47.dll unavailable - WarmerSun disabled");
         failed_ = true;
         return false;
     }
+    log_write("init: compiler ok");
     if (!compile_shaders() || !create_states()) {
         failed_ = true;
         return false;
     }
+
+    log_write("init: shaders+states ok");
 
     D3D11_BUFFER_DESC cb = {};
     cb.ByteWidth = sizeof(float) * 4 * 8;
@@ -412,6 +429,8 @@ bool Renderer::init(IDXGISwapChain* sc) {
         failed_ = true;
         return false;
     }
+
+    log_write("init: constant buffer ok");
 
     // Ping-pong exposure targets (EV, average luminance).
     for (int i = 0; i < 2; ++i) {
@@ -434,6 +453,9 @@ bool Renderer::init(IDXGISwapChain* sc) {
         context_->ClearRenderTargetView(exposureRTV_[i], zero);
     }
 
+    log_write("init: exposure targets ok");
+    if (hwnd_) ws::menu_init(hwnd_, device_, context_, find_config(self_module()));
+
     DXGI_SWAP_CHAIN_DESC desc = {};
     if (SUCCEEDED(sc->GetDesc(&desc))) {
         log_write("swap chain: %ux%u fmt=%d buffers=%u", desc.BufferDesc.Width,
@@ -447,6 +469,7 @@ bool Renderer::init(IDXGISwapChain* sc) {
 }
 
 void Renderer::shutdown() {
+    ws::menu_shutdown();
     release_size_dependent();
     destroy_pipeline();
     for (int i = 0; i < 2; ++i) {
@@ -697,6 +720,11 @@ void Renderer::update_constants(float dt, bool dynamicEnabled) {
 }
 
 void Renderer::tick_input() {
+    static bool endDown = false;
+    const bool endNow = (GetAsyncKeyState(VK_END) & 0x8000) != 0;
+    if (endNow && !endDown) ws::menu_toggle();
+    endDown = endNow;
+
     const int keys[3] = {config_.keyToggle, config_.keyPreset, config_.keyReload};
     for (int i = 0; i < 3; ++i) {
         bool down = keys[i] && (GetAsyncKeyState(keys[i]) & 0x8000) != 0;
@@ -727,15 +755,12 @@ void Renderer::tick_input() {
     }
 }
 
-bool Renderer::present(IDXGISwapChain* sc, UINT flags) {
-    if (flags & DXGI_PRESENT_TEST) return false;
-
-    // Hotkeys are polled even while disabled so F10 can bring the grade back.
-    tick_input();
-    if (!config_.enabled || config_.safeMode) return false;
-    if (!ready_ && !init(sc)) return false;
+bool Renderer::grade_now() {
+    if (!ready_ || !context_) return false;
+    if (graded_) return true;
     if (!ensure_size()) return false;
 
+    { static bool once = false; if (!once) { once = true; void** cv = *reinterpret_cast<void***>(context_); ws::log_write("grade context vtable=%p slot13=%p", static_cast<void*>(cv), cv[13]); } }
     ULONGLONG now = GetTickCount64();
     float dt = lastTick_ ? static_cast<float>(now - lastTick_) / 1000.0f : 1.0f / 60.0f;
     lastTick_ = now;
@@ -815,7 +840,36 @@ bool Renderer::present(IDXGISwapChain* sc, UINT flags) {
     context_->PSSetSamplers(0, 1, &samplerLin_);
     context_->Draw(3, 0);
 
-    // 5. dump if requested (before Present, while the backbuffer is valid)
+    context_->PSSetShaderResources(0, 2, nullSRV);
+    restore_state(context_, saved);
+    graded_ = true;
+    return true;
+}
+
+bool Renderer::present(IDXGISwapChain* sc, UINT flags) {
+    if (flags & DXGI_PRESENT_TEST) return false;
+    ws::refresh_shader_hooks();
+
+    tick_input();
+    if (!config_.enabled || config_.safeMode) return false;
+    if (!ready_ && !init(sc)) return false;
+    if (!ensure_size()) return false;
+
+    // Preferred path: the tonemap draw hook already graded the scene before
+    // the UI was drawn. Fallback: grade here (UI will be affected).
+    if (!graded_) grade_now();
+
+    if (ws::menu_visible() && backRTV_) {
+        ID3D11RenderTargetView* bb = backRTV_;
+        context_->OMSetRenderTargets(1, &bb, nullptr);
+        D3D11_VIEWPORT vp = {};
+        vp.Width = static_cast<float>(width_);
+        vp.Height = static_cast<float>(height_);
+        vp.MaxDepth = 1.0f;
+        context_->RSSetViewports(1, &vp);
+        ws::menu_render(context_, config_);
+    }
+
     if (config_.dumpFrames && frame_ >= static_cast<unsigned long long>(config_.dumpAfter) &&
         dumped_ < static_cast<unsigned>(config_.dumpCount)) {
         ID3D11Texture2D* back = nullptr;
@@ -828,8 +882,7 @@ bool Renderer::present(IDXGISwapChain* sc, UINT flags) {
         ++dumped_;
     }
 
-    context_->PSSetShaderResources(0, 2, nullSRV);
-    restore_state(context_, saved);
+    graded_ = false;
     ++frame_;
     return true;
 }
@@ -911,6 +964,16 @@ void Renderer::dump_backbuffer(ID3D11Texture2D* back) {
 }
 
 } // namespace ws
+
+
+
+
+
+
+
+
+
+
 
 
 

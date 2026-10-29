@@ -1,4 +1,4 @@
-# Engineering notes
+﻿# Engineering notes
 
 How WarmerSun is put together, why the pieces are where they are, and what is
 planned next. This document describes WarmerSun's own design; it does not
@@ -36,6 +36,14 @@ The returned swap chain then gets its own vtable slots patched: `Present` (8),
 `ResizeBuffers` (11), `Present1` (20) and `ResizeBuffers1` (37). `Present1`
 clears the game's dirty rectangles after grading, because the whole back buffer
 changed.
+
+## Hooking the engine
+
+The game resolves D3D11 dynamically, so the proxy hooks `GetProcAddress` in the
+host executable and redirects `D3D11CreateDevice` to a detour. That detour
+installs inline hooks (MinHook) on `CreatePixelShader` and the draw methods of
+the immediate context. The runtime replaces vtable entries during startup, so
+inline function hooks are used instead of vtable patching.
 
 ## Frame pipeline
 
@@ -117,12 +125,12 @@ keyboard hook is installed.
 
 ## Roadmap
 
-1. **HDR shader pass.** Hook `CreatePixelShader`, capture the game's tonemap and
-   adaptation shaders, and replace them with the same pipeline before tonemapping.
-   That recovers highlight headroom the LDR path cannot see.
+1. **HDR shader pass.** Replace the engine tonemap shader with the same pipeline
+   before tonemapping. That recovers highlight headroom the LDR path cannot see.
 2. **Material lighting.** Extend the hook to the road and vegetation shader
    families for wet-road normals and light-response improvements.
 3. **Per-preset curves.** Optional LUT export/import so presets can be authored
    in an image editor and applied 1:1.
 4. **Overlay.** A small in-game panel for live tuning, replacing the ini-only
    workflow.
+

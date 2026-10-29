@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 <img src="docs/media/hero.svg" alt="WarmerSun — a warm, filmic lighting grade for ETS2 and ATS" width="100%">
 
@@ -48,11 +48,12 @@ To uninstall, delete the three files. To disable without deleting, create an emp
 
 | Key | Action |
 |-----|--------|
+| `End` | open/close the in-game panel |
 | `F10` | toggle the grade on/off (A/B comparison) |
 | `F11` | cycle preset A → B → C → D |
 | `F12` | reload `WarmerSun.ini` while playing |
 
-All three are rebindable in the ini (`KeyToggle`, `KeyPreset`, `KeyReload`).
+`End` opens the settings panel with the full control set; the mouse becomes a virtual cursor so the game's cursor lock cannot interfere. `F10`–`F12` are rebindable in the ini.
 
 ## Presets
 
@@ -93,7 +94,7 @@ frame ──► copy ──► log-luminance ──► adaptive exposure ──�
                        64×64 → 1×1       1×1 ping-pong    CAS + tonemap
 ```
 
-- `dxgi.dll` proxies the real DXGI, patches the factory and swap-chain vtables (`Present`, `Present1`, `ResizeBuffers*`) and draws one fullscreen pass before presentation. Device state is saved and restored around it.
+- `dxgi.dll` proxies the real DXGI, hooks the swap chain and the D3D11 device/context (MinHook inline hooks), and applies the grade **right before the game draws its UI**, so menus and HUD keep their original colours. Device state is saved and restored around it.
 - `dinput8.dll` forwards the entire DirectInput 8 API to `System32\dinput8.dll`, then bootstraps the renderer early and honours the `WarmerSun.off` panic switch.
 - Shaders are compiled at runtime from embedded HLSL with `d3dcompiler_47.dll`.
 
@@ -148,6 +149,8 @@ Current build: `docs/ENGINEERING.md` describes the full pipeline. Next up:
 
 The detailed engineering notes are in [docs/ENGINEERING.md](docs/ENGINEERING.md).
 
+Third-party libraries: Dear ImGui (MIT) for the panel, MinHook (BSD-2-Clause) for inline hooks. Both are vendored under `third_party/`.
+
 ## Repository layout
 
 ```
@@ -167,3 +170,4 @@ See [CHANGELOG.md](CHANGELOG.md).
 ## Licence
 
 No licence has been chosen yet. Until one is added, all rights are reserved by the repository owner.
+
