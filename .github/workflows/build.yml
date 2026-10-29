@@ -17,7 +17,7 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: msys2/setup-msys2@v2
         with:
@@ -37,11 +37,40 @@ jobs:
           path: dist/WarmerSun.zip
           if-no-files-found: error
 
-      - name: Attach to release
+      - name: Publish release asset
         if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "${GITHUB_REF_NAME}" dist/WarmerSun.zip \
-            --title "WarmerSun ${GITHUB_REF_NAME}" --generate-notes \
-          || gh release upload "${GITHUB_REF_NAME}" dist/WarmerSun.zip --clobber
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const tag = context.ref.replace('refs/tags/', '');
+            const assetName = 'WarmerSun.zip';
+            const data = fs.readFileSync('dist/WarmerSun.zip');
+
+            let release;
+            try {
+              release = (await github.rest.repos.getReleaseByTag({ owner, repo, tag })).data;
+            } catch (error) {
+              release = (await github.rest.repos.createRelease({
+                owner, repo, tag_name: tag, name: `WarmerSun ${tag}`,
+                generate_release_notes: true
+              })).data;
+            }
+
+            const assets = (await github.rest.repos.listReleaseAssets({
+              owner, repo, release_id: release.id, per_page: 100
+            })).data;
+            for (const asset of assets.filter(a => a.name === assetName)) {
+              await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: asset.id });
+            }
+
+            await github.rest.repos.uploadReleaseAsset({
+              owner, repo, release_id: release.id, name: assetName,
+              data,
+              headers: {
+                'content-type': 'application/zip',
+                'content-length': data.length
+              }
+            });
