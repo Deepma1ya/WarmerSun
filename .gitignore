@@ -2,6 +2,7 @@
 dist/
 build/
 out/
+*.zip
 *.obj
 *.o
 *.pdb
