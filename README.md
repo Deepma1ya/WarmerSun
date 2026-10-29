@@ -44,7 +44,9 @@ DLLs to load the proxies in pass-through mode.
 Every control from the reference mod's panel is present in the ini:
 `Temperature`, `Tint`, `PreExposure`, `Exposure`, `PreContrast`, `Contrast`,
 `Saturation`, `Vibrance`, `Highlights`, `Shadows`, `Whites`, `Blacks`,
-`NightExposure`, plus `SunWarmth`, dynamic exposure and sharpening.
+`NightExposure`, plus `SunWarmth`, dynamic exposure, `Sharpness` and
+`SharpenEdges`. The default sharpening values (0.20 / 0.40) are the reference's
+own 2/10 and 4/10 defaults, recovered from its settings registry.
 
 ## Build
 

@@ -43,7 +43,8 @@ struct DynamicParams {
 
 struct SharpenParams {
     bool  enabled   = true;
-    float sharpness = 0.35f;   // 0..1
+    float sharpness = 0.20f;   // reference default: 2/10
+    float edges     = 0.40f;   // reference default: 4/10
 };
 
 struct Config {
@@ -104,4 +105,5 @@ std::string trim(const std::string& s);
 std::string lower(std::string s);
 
 } // namespace ws
+
 

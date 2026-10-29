@@ -49,6 +49,7 @@ cbuffer Params : register(b0)
     float4 g4; // texelX, texelY, dt, dynamicEnabled
     float4 g5; // adaptSpeed, key, minEV, maxEV
     float4 g6; // downsample scaleX, scaleY, inputEncoded, outputEncoded
+    float4 g7; // sharpen edges (0..1)
 };
 
 SamplerState Lin : register(s0);
@@ -170,7 +171,8 @@ float4 PSFinal(VSOut i) : SV_Target
         float3 mn = min(c, min(min(n, s), min(e, w)));
         float3 mx = max(c, max(max(n, s), max(e, w)));
         float3 amp = sqrt(saturate(min(mn, 1.0 - mx) / max(mx, 1e-5)));
-        float peak = -1.0 / lerp(8.0, 5.0, saturate(g3.w));
+        float edgeGain = lerp(0.70, 1.30, saturate(g7.x));
+        float peak = -1.0 / lerp(8.0, 5.0, saturate(g3.w)) * edgeGain;
         float3 weight = amp * peak;
         c = saturate((c + (n + s + e + w) * weight) / (1.0 + 4.0 * weight));
     }
@@ -401,7 +403,7 @@ bool Renderer::init(IDXGISwapChain* sc) {
     }
 
     D3D11_BUFFER_DESC cb = {};
-    cb.ByteWidth = sizeof(float) * 4 * 7;
+    cb.ByteWidth = sizeof(float) * 4 * 8;
     cb.Usage = D3D11_USAGE_DYNAMIC;
     cb.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
     cb.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
@@ -649,7 +651,7 @@ bool Renderer::ensure_size() {
 
 void Renderer::update_constants(float dt, bool dynamicEnabled) {
     const ColorParams& c = config_.color;
-    float data[28] = {};
+    float data[32] = {};
     data[0] = c.preExposure + c.exposure;
     data[1] = c.preContrast;
     data[2] = c.contrast;
@@ -684,6 +686,8 @@ void Renderer::update_constants(float dt, bool dynamicEnabled) {
     data[25] = height_ ? static_cast<float>(height_) / 64.0f : 1.0f;
     data[26] = inputEncoded_ ? 1.0f : 0.0f;
     data[27] = outputEncoded_ ? 1.0f : 0.0f;
+
+    data[28] = config_.sharpen.edges;
 
     D3D11_MAPPED_SUBRESOURCE mapped = {};
     if (SUCCEEDED(context_->Map(constants_, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
@@ -907,6 +911,7 @@ void Renderer::dump_backbuffer(ID3D11Texture2D* back) {
 }
 
 } // namespace ws
+
 
 
 

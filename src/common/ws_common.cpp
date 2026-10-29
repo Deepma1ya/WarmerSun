@@ -286,9 +286,11 @@ void apply_builtin_dynamic(char preset, DynamicParams& d) {
 
 void apply_builtin_sharpen(char preset, SharpenParams& s) {
     s = SharpenParams{};
-    if (preset == 'A') s.sharpness = 0.20f;
-    else if (preset == 'B') s.sharpness = 0.40f;
-    else if (preset == 'C') s.sharpness = 0.30f;
+    s.edges = 0.40f;
+    if (preset == 'A') s.sharpness = 0.15f;
+    else if (preset == 'B') s.sharpness = 0.35f;
+    else if (preset == 'C') s.sharpness = 0.25f;
+    else s.sharpness = 0.20f;
 }
 
 // ---------------------------------------------------------------------------
@@ -398,9 +400,11 @@ bool load_config(const std::wstring& path, Config& out, char presetOverride) {
 
     out.sharpen.enabled   = b(ini, sec.c_str(), "sharpen", out.sharpen.enabled);
     out.sharpen.sharpness = f(ini, sec.c_str(), "sharpness", out.sharpen.sharpness);
+    out.sharpen.edges     = f(ini, sec.c_str(), "sharpenedges", out.sharpen.edges);
 
     return true;
 }
 
 } // namespace ws
+
 

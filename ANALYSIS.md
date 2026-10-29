@@ -82,6 +82,53 @@ The tonemap/adaptation shader pack is downloaded separately and is not present
 on disk. `.vlizer` holds protected code. Exact preset constants could not be
 recovered statically.
 
+## Ghidra pass (Ghidra 12.1.4)
+
+A full import of `dxgi.dll` yields **14,496 procedures and 20,291 strings**
+across the normal sections plus `.vlizer` (5,089,792 bytes) and a small `tdb`
+segment. The three proxy exports resolve to `0x180014820`, `0x180014860` and
+`0x1800148a0`.
+
+Two functions are directly relevant to fidelity:
+
+- `FUN_1800a3290` is a **shader classifier**. It compares the engine's shader
+  path against known passes and assigns a numeric id, for example
+  `/effect/deferred/def_tonemap/def.tonemap.col.rfx1` → 101,
+  `def.tonemap` → 100, `.../def.tonemap.drr.bdist.rfx1` → 200, and
+  `/effect/generic/ui/ui.rfx1` → 102. This confirms the mod keys its work on
+  exact engine shader names rather than on a generic post-process.
+- `FUN_18007a560` is the **settings registry**. It registers every panel
+  parameter with a default, and for integer sliders a min/max. Reading the
+  default cells out of `.rdata`/`.data` shows that the tonemap parameters ship
+  **neutral**: `Exposure = 0`, `Pre_Exposure = 0`, `Pre_Contrast = 0`,
+  `Contrast = 1`, `Saturation = 1`, `Vibrance = 0`, `Highlights = 0`,
+  `NightExp = 0`, `Dynamic_Contrast = 1`.
+
+Recovered non-neutral defaults:
+
+| Setting | Default | Range |
+|---|---|---|
+| `sharpness` | 2 | 0..10 |
+| `sharpenedges` | 4 | 0..10 |
+| `motionblurintensity` | 5 | 0..10 |
+| `colorpreset` | 0 | 0..1 |
+| `Tonemap_Tonemap` | 0 | 0..6 |
+| `Tonemap_TonemapA` | 7 | 0..8 |
+
+The important consequence: the reference's *look* is not produced by these
+parameters. It comes from the selected tonemap curve and colour preset, and
+from the separately downloaded shader pack. No tonemap HLSL, ACES curve or
+`linear_to_srgb` helper exists in the binary — a string search for those terms
+returns nothing.
+
+WarmerSun therefore adopts the two evidence-backed defaults (sharpening 2/10
+and edges 4/10) and leaves the colour grade to its own presets, which is the
+only honest mapping while the HDR shader replacement is not implemented.
+
+`dinput8.dll` imports cleanly as a normal CRT build (3,147 procedures).
+`DirectInput8Create` lazily resolves the system DLL, forwards the call, and
+post-processes the returned interface; no protected payload is present there.
+
 ## dinput8.dll — the bootstrap stub
 
 Exports the complete DirectInput 8 proxy surface (`DirectInput8Create`,
