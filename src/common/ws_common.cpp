@@ -424,6 +424,16 @@ bool load_config(const std::wstring& path, Config& out, char presetOverride) {
     out.sharpen.sharpness = f(ini, sec.c_str(), "sharpness", out.sharpen.sharpness);
     out.sharpen.edges     = f(ini, sec.c_str(), "sharpenedges", out.sharpen.edges);
 
+    out.taa.enabled     = b(ini, sec.c_str(), "taa", out.taa.enabled);
+    out.taa.strength    = f(ini, sec.c_str(), "taastrength", out.taa.strength);
+    out.taa.clarity     = f(ini, sec.c_str(), "taaclarity", out.taa.clarity);
+    out.taa.motionBlur  = f(ini, sec.c_str(), "motionblur", out.taa.motionBlur);
+    out.taa.motionRange = f(ini, sec.c_str(), "motionrange", out.taa.motionRange);
+    const float samples = f(ini, sec.c_str(), "motionblursamples",
+                            static_cast<float>(out.taa.mbSamples));
+    out.taa.mbSamples = static_cast<int>(samples < 2.0f ? 2.0f
+                                     : samples > 16.0f ? 16.0f : samples);
+
     return true;
 }
 
@@ -476,6 +486,12 @@ bool save_config(const std::wstring& path, const Config& cfg) {
         i("Sharpen", sh.enabled ? 1 : 0);
         f("Sharpness", sh.sharpness);
         f("SharpenEdges", sh.edges);
+        i("TAA", cfg.taa.enabled ? 1 : 0);
+        f("TAAStrength", cfg.taa.strength);
+        f("TAAClarity", cfg.taa.clarity);
+        f("MotionBlur", cfg.taa.motionBlur);
+        i("MotionBlurSamples", cfg.taa.mbSamples);
+        f("MotionRange", cfg.taa.motionRange);
         out << "\n";
     }
     return out.good();

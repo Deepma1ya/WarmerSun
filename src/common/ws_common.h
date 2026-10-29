@@ -46,6 +46,15 @@ struct SharpenParams {
     float edges     = 0.40f;   // 0..1 edge bias
 };
 
+struct TAAParams {
+    bool  enabled     = true;   // replace the engine TAA pass
+    float strength    = 0.92f;  // 0..1 history weight
+    float clarity     = 0.15f;  // 0..1 local contrast on the resolved image
+    float motionBlur  = 0.35f;  // 0..4 camera motion blur
+    int   mbSamples   = 8;      // 2..16 taps
+    float motionRange = 12.0f;  // px of velocity that drops the history
+};
+
 struct Config {
     bool  enabled      = true;
     bool  safeMode     = false;  // reads "Disable" in the ini
@@ -58,6 +67,7 @@ struct Config {
     ColorParams   color;
     DynamicParams dynamic;
     SharpenParams sharpen;
+    TAAParams     taa;
 
     // virtual-key codes for hotkeys (0 = unbound)
     int keyToggle = VK_F10;

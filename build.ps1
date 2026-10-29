@@ -67,6 +67,7 @@ function Build-Target([string]$name, [string[]]$sources, [string[]]$libs) {
 $dxgiSources = @(
     (Join-Path $src "dxgi\ws_dxgi.cpp"),
     (Join-Path $src "dxgi\ws_renderer.cpp"),
+    (Join-Path $src "dxgi\ws_taa.cpp"),
     (Join-Path $src "dxgi\ws_menu.cpp"),
     (Join-Path $src "common\ws_common.cpp"),
     (Join-Path $imgui "imgui.cpp"),

@@ -1,5 +1,6 @@
 ﻿// WarmerSun - present-level D3D11 grading pipeline.
 #include "ws_renderer.h"
+#include "ws_taa.h"
 #include "ws_menu.h"
 #include <dxgi1_2.h>
 
@@ -358,6 +359,9 @@ void restore_state(ID3D11DeviceContext* ctx, SavedState& s) {
 
 void Renderer::set_config(const Config& cfg) {
     config_ = cfg;
+    ws::taa::set_enabled(cfg.taa.enabled);
+    ws::taa::set_params(cfg.taa.strength, cfg.taa.clarity, cfg.taa.motionBlur,
+                        cfg.taa.mbSamples, cfg.taa.motionRange);
 }
 
 void Renderer::reload_config() {
@@ -369,6 +373,9 @@ void Renderer::reload_config() {
     // Keep command-line-ish runtime state that is not in the file.
     fresh.enabled = fresh.enabled && !fresh.safeMode;
     config_ = fresh;
+    ws::taa::set_enabled(fresh.taa.enabled);
+    ws::taa::set_params(fresh.taa.strength, fresh.taa.clarity, fresh.taa.motionBlur,
+                        fresh.taa.mbSamples, fresh.taa.motionRange);
     log_write("config reloaded (preset %c, enabled=%d)", config_.preset, config_.enabled ? 1 : 0);
 }
 
@@ -964,6 +971,7 @@ void Renderer::dump_backbuffer(ID3D11Texture2D* back) {
 }
 
 } // namespace ws
+
 
 
 

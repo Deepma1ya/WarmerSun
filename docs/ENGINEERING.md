@@ -45,6 +45,37 @@ installs inline hooks (MinHook) on `CreatePixelShader` and the draw methods of
 the immediate context. The runtime replaces vtable entries during startup, so
 inline function hooks are used instead of vtable patching.
 
+## Temporal anti-aliasing
+
+ETS2/ATS already run a TAA pass (`def.taa.compute`). Rather than stack a second
+accumulator on top of it, WarmerSun replaces that pass's pixel shader and keeps
+every binding the engine made:
+
+| Slot | Contents |
+| --- | --- |
+| `t0` | current scene colour |
+| `t1` | previous frame colour |
+| `t3` | previous frame depth (log encoded, 1/4096) |
+| `t4.x` | current depth (same encoding) |
+| `t4.y` | 2-bit x/y subpixel jitter index, depth tolerance above bit 4 |
+| `t15` | tile flags |
+| `b0` | engine constant buffer, 224 bytes |
+
+`b0` carries the *previous* frame's view-projection rows in `cb0[0..3]`, the
+previous view row in `cb0[6]`, the previous jitter in `cb0[8]`, the texel step
+in `cb0[9].yz`, the screen-to-NDC scale in `cb0[10]`, the pixel count in
+`cb0[11]` and the unprojection terms in `cb0[13]`.
+
+The resolver reconstructs the view-space position from the current depth, draws
+it through the previous view-projection and compares the result with the depth
+stored at the reprojected pixel. Only a match earns history weight; everything
+else resolves to the current frame. The difference between the two screen
+positions is also the motion vector, which drives the camera motion blur in the
+same shader.
+
+Tuning reaches the shader through `b1`, a second constant buffer that the
+engine's TAA shader never declares, so no engine state is modified.
+
 ## Frame pipeline
 
 ```
@@ -125,12 +156,12 @@ keyboard hook is installed.
 
 ## Roadmap
 
-1. **HDR shader pass.** Replace the engine tonemap shader with the same pipeline
+1. **Per-object motion vectors.** Reproject road and vegetation pixels with the
+   motion vectors the material shaders can provide, instead of relying on the
+   camera-only reprojection.
+2. **HDR shader pass.** Replace the engine tonemap shader with the same pipeline
    before tonemapping. That recovers highlight headroom the LDR path cannot see.
-2. **Material lighting.** Extend the hook to the road and vegetation shader
+3. **Material lighting.** Extend the hook to the road and vegetation shader
    families for wet-road normals and light-response improvements.
-3. **Per-preset curves.** Optional LUT export/import so presets can be authored
+4. **Per-preset curves.** Optional LUT export/import so presets can be authored
    in an image editor and applied 1:1.
-4. **Overlay.** A small in-game panel for live tuning, replacing the ini-only
-   workflow.
-

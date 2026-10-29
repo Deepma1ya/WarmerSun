@@ -5,6 +5,8 @@
 #include "imgui_impl_dx11.h"
 #include "imgui_impl_win32.h"
 
+#include "ws_taa.h"
+
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND, UINT, WPARAM, LPARAM);
 
 namespace ws {
@@ -188,6 +190,19 @@ void draw_panel(Config& cfg) {
             ImGui::TextDisabled("Contrast adaptive sharpening, applied in linear light.");
             ImGui::EndTabItem();
         }
+        if (ImGui::BeginTabItem("AA / Motion")) {
+            ImGui::Spacing();
+            ImGui::Checkbox("Temporal AA (replaces the engine pass)", &cfg.taa.enabled);
+            ImGui::SliderFloat("TAA strength", &cfg.taa.strength, 0.0f, 1.0f, "%.3f");
+            ImGui::SliderFloat("TAA clarity", &cfg.taa.clarity, 0.0f, 1.0f, "%.3f");
+            ImGui::Spacing();
+            ImGui::SliderFloat("Motion blur", &cfg.taa.motionBlur, 0.0f, 4.0f, "%.2f");
+            ImGui::SliderInt("Blur samples", &cfg.taa.mbSamples, 2, 16);
+            ImGui::SliderFloat("Blur cut-off", &cfg.taa.motionRange, 2.0f, 48.0f, "%.1f px");
+            ImGui::TextDisabled("History is dropped above the cut-off speed, so fast");
+            ImGui::TextDisabled("camera moves never smear.");
+            ImGui::EndTabItem();
+        }
         if (ImGui::BeginTabItem("Info")) {
             ImGui::Spacing();
             ImGui::Text("End        show / hide this panel");
@@ -195,13 +210,16 @@ void draw_panel(Config& cfg) {
             ImGui::Text("F11        cycle preset");
             ImGui::Text("F12        reload WarmerSun.ini");
             ImGui::Separator();
-            ImGui::TextDisabled("WarmerSun v0.2 - no DRM, no network, no telemetry.");
+            ImGui::TextDisabled("WarmerSun v0.3 - no DRM, no network, no telemetry.");
             ImGui::EndTabItem();
         }
         ImGui::EndTabBar();
     }
 
     ImGui::Separator();
+    ws::taa::set_enabled(cfg.taa.enabled);
+    ws::taa::set_params(cfg.taa.strength, cfg.taa.clarity, cfg.taa.motionBlur,
+                        cfg.taa.mbSamples, cfg.taa.motionRange);
     if (ImGui::Button("Save to WarmerSun.ini", ImVec2(220.0f * g_scale, 0.0f))) {
         g_status = save_config(g_configPath, cfg) ? "Saved." : "Could not write the ini.";
     }
@@ -319,6 +337,7 @@ void menu_render(ID3D11DeviceContext* context, Config& cfg) {
 }
 
 } // namespace ws
+
 
 
 

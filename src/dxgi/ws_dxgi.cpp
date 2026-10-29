@@ -12,6 +12,8 @@
 
 #include "ws_common.h"
 #include "ws_renderer.h"
+#include "ws_taa.h"
+#include "ws_taa_hashes.h"
 #include "ws_tonemap_hashes.h"
 #include "ws_ui_hashes.h"
 #include "MinHook.h"
@@ -193,6 +195,9 @@ bool                  g_loggedStateTrigger = false;
 ID3D11PixelShader*    g_uiShaders[64] = {};
 int                   g_uiCount = 0;
 bool                  g_loggedUi = false;
+bool                  g_loggedTaa = false;
+ID3D11PixelShader*    g_taaSavedPS = nullptr;
+ID3D11Buffer*         g_taaSavedCB = nullptr;
 bool                  g_loggedCapture = false;
 ID3D11Device*         g_hookDevice = nullptr;
 ID3D11DeviceContext*  g_hookContext = nullptr;
@@ -244,6 +249,41 @@ bool looks_like_tonemap(const void* code, size_t size) {
         D3D11_SHADER_BUFFER_DESC bd = {};
         const bool cbSize = cb && SUCCEEDED(cb->GetDesc(&bd)) && bd.Size == 144;
         match = tex0 && tex1 && cbSize;
+    }
+    refl->Release();
+    return match;
+}
+
+// The engine's TAA pass binds five textures: two colour targets and three
+// uint targets (previous depth, current depth + jitter, tile flags), one
+// 224-byte constant buffer, and it writes two targets.
+bool looks_like_taa(const void* code, size_t size) {
+    if (!g_d3dReflect || !code || !size) return false;
+    ID3D11ShaderReflection* refl = nullptr;
+    if (FAILED(g_d3dReflect(code, size, kWsShaderReflectionIid,
+                            reinterpret_cast<void**>(&refl))) || !refl) {
+        return false;
+    }
+    D3D11_SHADER_DESC desc = {};
+    bool match = false;
+    if (SUCCEEDED(refl->GetDesc(&desc)) && desc.BoundResources == 5 &&
+        desc.ConstantBuffers == 1 && desc.OutputParameters == 2) {
+        bool colour = false, uintTex = false, t3 = false, t4 = false, t15 = false;
+        for (UINT i = 0; i < desc.BoundResources; ++i) {
+            D3D11_SHADER_INPUT_BIND_DESC b = {};
+            if (FAILED(refl->GetResourceBindingDesc(i, &b))) continue;
+            if (b.Type != D3D_SIT_TEXTURE) continue;
+            if (b.BindPoint == 0 || b.BindPoint == 1) {
+                colour = b.ReturnType == D3D_RETURN_TYPE_FLOAT || b.ReturnType == D3D_RETURN_TYPE_MIXED;
+            }
+            if (b.BindPoint == 3) { t3 = true; uintTex = b.ReturnType == D3D_RETURN_TYPE_UINT || b.ReturnType == D3D_RETURN_TYPE_MIXED; }
+            if (b.BindPoint == 4) t4 = true;
+            if (b.BindPoint == 15) t15 = true;
+        }
+        ID3D11ShaderReflectionConstantBuffer* cb = refl->GetConstantBufferByIndex(0);
+        D3D11_SHADER_BUFFER_DESC bd = {};
+        const bool cbSize = cb && SUCCEEDED(cb->GetDesc(&bd)) && bd.Size == 224;
+        match = colour && uintTex && t3 && t4 && t15 && cbSize;
     }
     refl->Release();
     return match;
@@ -347,6 +387,18 @@ HRESULT STDMETHODCALLTYPE HookCreatePixelShader(ID3D11Device* self, const void* 
             ws::log_write("tonemap shader family captured");
         }
     }
+    if (SUCCEEDED(hr) && out && *out) {
+        const bool taa = (shaderHash && ws::is_taa_shader_hash(shaderHash)) ||
+                         looks_like_taa(code, size);
+        if (taa) {
+            ws::taa::note_shader(*out);
+            if (!g_loggedTaa) {
+                g_loggedTaa = true;
+                ws::log_write("taa: engine pass found (hash=%d) - using the WarmerSun shader",
+                              shaderHash && ws::is_taa_shader_hash(shaderHash) ? 1 : 0);
+            }
+        }
+    }
     return hr;
 }
 
@@ -354,6 +406,42 @@ void STDMETHODCALLTYPE HookPSSetShader(ID3D11DeviceContext* self, ID3D11PixelSha
                                        ID3D11ClassInstance* const* instances, UINT count) {
     g_currentPS = ps;
     g_origPSSetShader(self, ps, instances, count);
+}
+
+// ---------------------------------------------------------------------------
+// TAA / motion blur: swap the engine's TAA pixel shader for ours while its
+// draw runs. Every binding the engine made stays untouched; only the shader
+// and the (otherwise unused) b1 slot change.
+// ---------------------------------------------------------------------------
+bool taa_begin(ID3D11DeviceContext* ctx) {
+    if (!ws::taa::enabled() || !ws::taa::replacement()) return false;
+    if (!ws::taa::is_taa(g_currentPS)) return false;
+    g_taaSavedPS = g_currentPS;
+    static bool logged = false;
+    if (!logged) {
+        logged = true;
+        ws::log_write("taa: resolving with the WarmerSun shader");
+    }
+    ctx->PSGetConstantBuffers(1, 1, &g_taaSavedCB);
+    ID3D11Buffer* tune = ws::taa::tune_buffer();
+    if (tune) {
+        ws::taa::write_tune(ctx);
+        ctx->PSSetConstantBuffers(1, 1, &tune);
+    }
+    g_origPSSetShader(ctx, ws::taa::replacement(), nullptr, 0);
+    return true;
+}
+
+void taa_end(ID3D11DeviceContext* ctx) {
+    if (g_taaSavedPS) g_origPSSetShader(ctx, g_taaSavedPS, nullptr, 0);
+    if (g_taaSavedCB) {
+        ctx->PSSetConstantBuffers(1, 1, &g_taaSavedCB);
+        g_taaSavedCB->Release();
+        g_taaSavedCB = nullptr;
+    } else {
+        ctx->PSSetConstantBuffers(1, 1, nullptr);
+    }
+    g_taaSavedPS = nullptr;
 }
 
 void maybe_grade_before_ui(ID3D11DeviceContext* ctx) {
@@ -373,14 +461,18 @@ void maybe_grade_before_ui(ID3D11DeviceContext* ctx) {
 
 void STDMETHODCALLTYPE HookDraw(ID3D11DeviceContext* self, UINT count, UINT start) {
     maybe_grade_before_ui(self);
+    const bool taa = taa_begin(self);
     g_origDraw(self, count, start);
+    if (taa) taa_end(self);
     maybe_grade(self);
 }
 
 void STDMETHODCALLTYPE HookDrawIndexed(ID3D11DeviceContext* self, UINT count, UINT start,
                                        INT base) {
     maybe_grade_before_ui(self);
+    const bool taa = taa_begin(self);
     g_origDrawIndexed(self, count, start, base);
+    if (taa) taa_end(self);
     maybe_grade(self);
 }
 
@@ -397,7 +489,9 @@ void STDMETHODCALLTYPE HookDrawInstanced(ID3D11DeviceContext* self, UINT vertexC
                                          UINT instanceCount, UINT startVertex,
                                          UINT startInstance) {
     maybe_grade_before_ui(self);
+    const bool taa = taa_begin(self);
     g_origDrawInstanced(self, vertexCount, instanceCount, startVertex, startInstance);
+    if (taa) taa_end(self);
     maybe_grade(self);
 }
 
@@ -405,8 +499,10 @@ void STDMETHODCALLTYPE HookDrawIndexedInstanced(ID3D11DeviceContext* self, UINT 
                                                 UINT instanceCount, UINT startIndex,
                                                 INT baseVertex, UINT startInstance) {
     maybe_grade_before_ui(self);
+    const bool taa = taa_begin(self);
     g_origDrawIndexedInstanced(self, indexCount, instanceCount, startIndex, baseVertex,
                                startInstance);
+    if (taa) taa_end(self);
     maybe_grade(self);
 }
 
@@ -443,6 +539,8 @@ void install_shader_hooks(ID3D11Device* device) {
     MH_CreateHook(reinterpret_cast<void*>(cv[20]),
                   reinterpret_cast<void*>(&HookDrawIndexedInstanced),
                   reinterpret_cast<void**>(&g_origDrawIndexedInstanced));
+    MH_CreateHook(reinterpret_cast<void*>(cv[9]), reinterpret_cast<void*>(&HookPSSetShader),
+                  reinterpret_cast<void**>(&g_origPSSetShader));
 
     const MH_STATUS enable = MH_EnableHook(MH_ALL_HOOKS);
     if (enable != MH_OK) {
@@ -458,6 +556,7 @@ void install_shader_hooks(ID3D11Device* device) {
     g_hookDevice = device;
     g_hookContext = ctx;
     g_shaderHooks = true;
+    ws::taa::install(device, nullptr);
     ws::log_write("shader hooks installed via MinHook (reflect=%d)", g_d3dReflect ? 1 : 0);
 }
 
@@ -877,6 +976,8 @@ extern "C" BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID) {
     }
     return TRUE;
 }
+
+
 
 
 

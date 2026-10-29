@@ -3,6 +3,22 @@
 All notable changes to WarmerSun. The format follows Keep a Changelog and the
 project uses semantic versioning once a licence is chosen.
 
+## v0.3.0
+
+- Added temporal anti-aliasing. WarmerSun now provides the resolver for the
+  engine's TAA pass: the engine keeps feeding colour, history, depth and its
+  own reprojection matrices, while the blend, the clarity pass and the depth
+  validation are ours.
+- Added camera motion blur, driven by the same reprojection. The history is
+  dropped above a configurable pixel velocity so fast moves never smear.
+- New `AA / Motion` tab in the End panel: TAA on/off, strength, clarity,
+  motion blur amount, sample count and cut-off.
+- New ini keys (`TAA`, `TAAStrength`, `TAAClarity`, `MotionBlur`,
+  `MotionBlurSamples`, `MotionRange`) in every preset section.
+- PSSetShader is now tracked with an inline hook so the pass swap costs
+  nothing on ordinary draws.
+- Harness re-verified (PASS).
+
 ## v0.2.0
 
 - Added the End-key in-game panel (Dear ImGui) with presets, colour, tone,
@@ -61,4 +77,5 @@ First public release.
 - Four presets, live ini reload and hotkeys.
 - End-to-end harness with before/after frame comparison.
 - No DRM, no account, no network, no telemetry.
+
 

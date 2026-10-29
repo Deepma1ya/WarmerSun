@@ -104,6 +104,26 @@ frame ──► copy ──► log-luminance ──► adaptive exposure ──�
 - `dinput8.dll` forwards the entire DirectInput 8 API to `System32\dinput8.dll`, then bootstraps the renderer early and honours the `WarmerSun.off` panic switch.
 - Shaders are compiled at runtime from embedded HLSL with `d3dcompiler_47.dll`.
 
+## Anti-aliasing and motion blur
+
+WarmerSun takes over the engine's TAA pass. The engine still supplies the
+scene colour, the previous frame and its own reprojection matrices, so the
+timing matches the game exactly — but the history blend, the clarity pass and
+the camera motion blur are ours.
+
+| Control | Range | Effect |
+| --- | --- | --- |
+| `TAA` | on / off | use the WarmerSun resolver, or keep the engine shader |
+| `TAAStrength` | 0..1 | how much of the previous frame is kept |
+| `TAAClarity` | 0..1 | local contrast on the resolved image |
+| `MotionBlur` | 0..4 | camera motion blur |
+| `MotionBlurSamples` | 2..16 | taps along the motion direction |
+| `MotionRange` | px | velocity at which the history is dropped |
+
+The resolver validates every pixel against the previous frame's depth before
+it trusts the history. When the comparison fails the pixel falls back to the
+current frame, so fast camera moves and cuts never smear.
+
 The DLLs are statically linked and import only `KERNEL32`/`USER32` plus the Universal CRT.
 
 ## Build from source
