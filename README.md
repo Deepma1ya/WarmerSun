@@ -74,7 +74,7 @@ Everything lives in `WarmerSun.ini`. The file is read at start-up and reloaded w
 | Exposure | `Dynamic`, `AdaptSpeed`, `Key`, `MinEV`, `MaxEV` |
 | Detail | `Sharpen`, `Sharpness` (0.20 default), `SharpenEdges` (0.40 default) |
 
-The two sharpening defaults are the reference mod's own recovered values (2/10 and 4/10). Every preset is a full section, so you can edit one without touching the others.
+The defaults (0.20 / 0.40) are tuned for a crisp edge response without ringing. Every preset is a full section, so you can edit one without touching the others.
 
 ## Troubleshooting
 
@@ -120,15 +120,33 @@ python tests\check_frames.py tests\out\harness_before.dds tests\out\WarmerSun_fr
 
 ![Before and after](docs/media/before-after.png)
 
-Measured on the reference pattern (preset D): warmth **1.277 → 1.413**, contrast σ **0.287 → 0.315**, highlight clipping **4.48% → 4.08%**.
+Measured on the synthetic test pattern (preset D): warmth **1.277 → 1.413**, contrast σ **0.287 → 0.315**, highlight clipping **4.48% → 4.08%**.
 
-## Scope and fidelity
+## Design and roadmap
 
-WarmerSun is a clean-room reimplementation of the *behaviour* of a commercial ETS2 lighting mod, built from static analysis of its shipped DLLs ([ANALYSIS.md](ANALYSIS.md)). It contains no code or assets from it.
+WarmerSun is an independent lighting mod. It owns the frame at presentation,
+grades in linear light, and keeps the game's state untouched:
 
-- Architecture, control set, presets, hook position and the two-DLL bootstrap match the reference design.
-- The reference replaces the game's HDR `def.tonemap` / `def.adapt` shaders and downloads a shader pack at runtime. Those shaders are not in the shipped DLLs, so WarmerSun currently grades the **presented LDR frame**.
-- A shader-level HDR mode (hooking `def.tonemap` / `def.adapt`) is the next phase and needs the game installed to capture the real bytecode.
+- **Exposure that behaves.** A 64×64 → 1×1 luminance chain drives a 1×1 ping-pong
+  exposure target, so the eye-adaptation curve is smooth and needs no CPU readback.
+- **Tone controls that do not clip.** Highlights and shadows are luminance-masked,
+  whites and blacks are quartic end-point offsets, and the shoulder only touches
+  values above 1.0.
+- **Warmth without a cast.** White balance is luminance-normalised, and the warm
+  tint is limited to the top of the curve (`SunWarmth`).
+- **Detail without halos.** Contrast-adaptive sharpening with a separate
+  `SharpenEdges` bias.
+- **Safe by default.** Any failure (missing compiler, bad shader, unsupported
+  format) falls back to an untouched frame and writes the reason to the log.
+
+Current build: `docs/ENGINEERING.md` describes the full pipeline. Next up:
+
+1. HDR shader pass before the game's tonemap, to recover highlight headroom.
+2. Road and vegetation material lighting.
+3. Per-preset LUT import/export.
+4. A small in-game tuning overlay.
+
+The detailed engineering notes are in [docs/ENGINEERING.md](docs/ENGINEERING.md).
 
 ## Repository layout
 
@@ -138,7 +156,8 @@ src/dinput8/    DirectInput proxy and bootstrap
 src/common/     ini parser, logging, presets
 assets/         shipped ini and install text
 tests/          D3D11 harness and frame comparison
-docs/media/     README images
+docs/           engineering notes and README images
+scripts/        packaging
 ```
 
 ## Changelog

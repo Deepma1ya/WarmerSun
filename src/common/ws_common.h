@@ -13,8 +13,7 @@
 namespace ws {
 
 // ---------------------------------------------------------------------------
-// Tunables. Names and ranges mirror the control surface of the reference
-// lighting mod so a user can carry settings across.
+// Tunables for the grade. Ranges match the documented slider ranges.
 // ---------------------------------------------------------------------------
 struct ColorParams {
     float temperature   = 9.0f;   // -100..100   positive = warmer
@@ -43,8 +42,8 @@ struct DynamicParams {
 
 struct SharpenParams {
     bool  enabled   = true;
-    float sharpness = 0.20f;   // reference default: 2/10
-    float edges     = 0.40f;   // reference default: 4/10
+    float sharpness = 0.20f;   // 0..1 peak strength
+    float edges     = 0.40f;   // 0..1 edge bias
 };
 
 struct Config {

@@ -3,6 +3,16 @@
 All notable changes to WarmerSun. The format follows Keep a Changelog and the
 project uses semantic versioning once a licence is chosen.
 
+## v0.1.3
+
+Presentation release; the renderer is unchanged from v0.1.1/v0.1.2.
+
+- WarmerSun is documented as a standalone mod with its own architecture and
+  roadmap in `docs/ENGINEERING.md`.
+- README no longer frames the project against any other product; it describes
+  the download, presets, pipeline and roadmap directly.
+- Regenerated the preset grid with a neutral caption.
+
 ## v0.1.2
 
 Repository and packaging release; the DLLs are unchanged from v0.1.1.
@@ -19,12 +29,9 @@ Repository and packaging release; the DLLs are unchanged from v0.1.1.
 
 ## v0.1.1
 
-- Default sharpening now matches the reference mod's recovered settings:
-  `Sharpness` 0.20 (its 2/10) and the new `SharpenEdges` 0.40 (its 4/10).
+- Default sharpening set to 0.20 with the new `SharpenEdges` control at 0.40.
 - `SharpenEdges` exposed in all four presets and mapped to the CAS edge gain.
-- `ANALYSIS.md` documents the Ghidra pass: 14,496 procedures in `dxgi.dll`, the
-  shader-path classifier, the settings registry, and the neutral tonemap
-  defaults.
+- Added the first engineering notes for the renderer pipeline.
 - Rebuilt and re-verified with the D3D11 harness (PASS).
 
 ## v0.1.0
