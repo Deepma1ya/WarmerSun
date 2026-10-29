@@ -42,3 +42,9 @@ Delete the file to re-enable.
 Do not use with another dxgi/dinput8 proxy (ReShade's dxgi.dll, Special K, a
 DLSS unlocker) in the same folder - only one module can own each name.
 
+Anti-aliasing / motion blur
+---------------------------
+The AA / Motion tab in the End panel controls WarmerSun's TAA resolver and the
+camera motion blur. The same values live in every preset section of the ini:
+  TAA, TAAStrength, TAAClarity, MotionBlur, MotionBlurSamples, MotionRange
+Set TAA=0 to fall back to the game's own TAA shader.
