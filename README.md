@@ -64,6 +64,12 @@ To uninstall, delete the three files. To disable without deleting, create an emp
 | **C** Night | lifts dark scenes without washing out headlights |
 | **D** WarmerSun | **default** — golden highlights, neutral shadows |
 
+## In-game panel
+
+Press `End` in game. The panel edits the same values as the ini, live, and the
+virtual cursor is independent of the game's cursor lock.
+
+![WarmerSun panel](docs/media/panel.png)
 ## Configure
 
 Everything lives in `WarmerSun.ini`. The file is read at start-up and reloaded with `F12`.
@@ -170,4 +176,5 @@ See [CHANGELOG.md](CHANGELOG.md).
 ## Licence
 
 No licence has been chosen yet. Until one is added, all rights are reserved by the repository owner.
+
 
