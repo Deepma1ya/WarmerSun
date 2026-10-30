@@ -416,7 +416,18 @@ void STDMETHODCALLTYPE HookPSSetShader(ID3D11DeviceContext* self, ID3D11PixelSha
 bool taa_begin(ID3D11DeviceContext* ctx) {
     if (!ws::taa::enabled() || !ws::taa::replacement()) return false;
     if (!ws::taa::is_taa(g_currentPS)) return false;
-    g_taaSavedPS = g_currentPS;
+
+    // g_currentPS is only a hint (it is not owned), so ask the context which
+    // shader is really bound. PSGetShader hands back a reference, which is what
+    // we restore later - never the unowned hint.
+    ID3D11PixelShader* bound = nullptr;
+    ctx->PSGetShader(&bound, nullptr, nullptr);
+    if (!bound || bound != g_currentPS || !ws::taa::is_taa(bound)) {
+        if (bound) bound->Release();
+        return false;
+    }
+    g_taaSavedPS = bound;
+
     static bool logged = false;
     if (!logged) {
         logged = true;
@@ -429,11 +440,25 @@ bool taa_begin(ID3D11DeviceContext* ctx) {
         ctx->PSSetConstantBuffers(1, 1, &tune);
     }
     g_origPSSetShader(ctx, ws::taa::replacement(), nullptr, 0);
+    static bool loggedSwap = false;
+    if (!loggedSwap) {
+        loggedSwap = true;
+        ws::log_write("taa: resolver bound, drawing");
+    }
     return true;
 }
 
 void taa_end(ID3D11DeviceContext* ctx) {
-    if (g_taaSavedPS) g_origPSSetShader(ctx, g_taaSavedPS, nullptr, 0);
+    if (g_taaSavedPS) {
+        static bool loggedRestore = false;
+        if (!loggedRestore) {
+            loggedRestore = true;
+            ws::log_write("taa: draw finished, restoring the engine shader");
+        }
+        g_origPSSetShader(ctx, g_taaSavedPS, nullptr, 0);
+        g_taaSavedPS->Release();
+        g_taaSavedPS = nullptr;
+    }
     if (g_taaSavedCB) {
         ctx->PSSetConstantBuffers(1, 1, &g_taaSavedCB);
         g_taaSavedCB->Release();
@@ -441,7 +466,6 @@ void taa_end(ID3D11DeviceContext* ctx) {
     } else {
         ctx->PSSetConstantBuffers(1, 1, nullptr);
     }
-    g_taaSavedPS = nullptr;
 }
 
 void maybe_grade_before_ui(ID3D11DeviceContext* ctx) {

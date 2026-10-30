@@ -278,7 +278,12 @@ void note_shader(ID3D11PixelShader* ps) {
     for (int i = 0; i < g_familyCount; ++i) {
         if (g_family[i] == ps) return;
     }
-    if (g_familyCount < 32) g_family[g_familyCount++] = ps;
+    if (g_familyCount < 32) {
+        // Hold a reference: pointer comparisons against a released shader could
+        // otherwise match a different object allocated at the same address.
+        ps->AddRef();
+        g_family[g_familyCount++] = ps;
+    }
 }
 
 bool is_taa(ID3D11PixelShader* ps) {
@@ -307,6 +312,10 @@ void set_params(float strength, float clarity, float motion_blur,
 void shutdown() {
     if (g_tune) { g_tune->Release(); g_tune = nullptr; }
     if (g_replacement) { g_replacement->Release(); g_replacement = nullptr; }
+    for (int i = 0; i < g_familyCount; ++i) {
+        if (g_family[i]) g_family[i]->Release();
+        g_family[i] = nullptr;
+    }
     g_familyCount = 0;
     g_tried = false;
 }
